@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>論文サマリーAI</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;600&family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+
+:root {
+  --ink: #0f0e0c;
+  --paper: #faf8f3;
+  --cream: #f2ede2;
+  --accent: #c8401a;
+  --accent2: #2a6496;
+  --teal: #0d7377;
+  --gold: #b8860b;
+  --muted: #6b6560;
+  --border: #d4cfc5;
+  --white: #ffffff;
+  --tag-bio: #e8f5e9; --tag-bio-t: #2e7d32;
+  --tag-gene: #fce4ec; --tag-gene-t: #880e4f;
+  --tag-chem: #e3f2fd; --tag-chem-t: #1565c0;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Noto Sans JP', sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  line-height: 1.7;
+}
+
+/* HEADER */
+header {
+  background: var(--ink);
+  color: var(--paper);
+  position: sticky; top: 0; z-index: 200;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.35);
+}
+.header-inner {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 28px; max-width: 1400px; margin: 0 auto;
+}
+.logo { font-family: 'IBM Plex Mono', monospace; font-size: 1rem; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.logo span { color: var(--paper); }
+.hdr-sub { font-size: 0.68rem; color: #888; font-family: 'IBM Plex Mono', monospace; letter-spacing: 1px; text-transform: uppercase; }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.nav-btn {
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem;
+  background: transparent; border: 1px solid #444; color: #bbb;
+  padding: 5px 12px; border-radius: 20px; cursor: pointer;
+  transition: all 0.2s; white-space: nowrap;
+}
+.nav-btn:hover, .nav-btn.active { border-color: var(--teal); color: #7ecac9; }
+
+/* MODAL */
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6); z-index: 500;
+  align-items: center; justify-content: center; padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--white); border-radius: 14px;
+  width: 100%; max-width: 640px; max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  animation: slideUp 0.25s ease;
+}
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.modal-header {
+  background: var(--ink); color: var(--paper);
+  padding: 20px 24px; border-radius: 14px 14px 0 0;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-title { font-family: 'Noto Serif JP', serif; font-size: 1.1rem; font-weight: 600; }
+.modal-close { background: transparent; border: none; color: #aaa; font-size: 1.3rem; cursor: pointer; }
+.modal-close:hover { color: white; }
+.modal-body { padding: 24px; }
+.form-group { margin-bottom: 18px; }
+.form-label { display: block; font-size: 0.78rem; font-weight: 500; color: var(--muted); margin-bottom: 6px; font-family: 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: 0.5px; }
+.form-input, .form-textarea {
+  width: 100%; border: 1.5px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; font-family: 'Noto Sans JP', sans-serif; font-size: 0.875rem;
+  background: var(--paper); color: var(--ink); outline: none; transition: border-color 0.2s;
+}
+.form-input:focus, .form-textarea:focus { border-color: var(--teal); }
+.form-textarea { min-height: 90px; resize: vertical; line-height: 1.7; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.btn-save {
+  width: 100%; padding: 13px; background: var(--teal); color: white; border: none;
+  border-radius: 8px; font-size: 0.95rem; font-family: 'Noto Serif JP', serif;
+  font-weight: 600; cursor: pointer; transition: background 0.2s; margin-top: 8px;
+}
+.btn-save:hover { background: #0a5c5f; }
+
+/* profile badge */
+.pb-header { background: #0d1a1a; padding: 0 28px; }
+.profile-badge {
+  display: none; align-items: center; gap: 10px;
+  max-width: 1400px; margin: 0 auto;
+  font-size: 0.78rem; padding: 7px 0;
+}
+.profile-badge.visible { display: flex; }
+.pb-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.63rem; color: var(--teal); text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
+.pb-text { color: #ccc; flex: 1; font-size: 0.76rem; }
+.pb-edit { font-family: 'IBM Plex Mono', monospace; font-size: 0.63rem; color: var(--teal); background: transparent; border: 1px solid var(--teal); padding: 2px 8px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+
+/* UPLOAD */
+.upload-zone { max-width: 820px; margin: 40px auto 0; padding: 0 24px; }
+.upload-card {
+  border: 2px dashed var(--border); border-radius: 12px;
+  background: white; padding: 44px 32px; text-align: center;
+  cursor: pointer; transition: all 0.2s;
+}
+.upload-card:hover, .upload-card.drag-over { border-color: var(--accent2); background: #f5f8fc; }
+.upload-icon { font-size: 2.8rem; margin-bottom: 10px; }
+.upload-title { font-family: 'Noto Serif JP', serif; font-size: 1.35rem; font-weight: 600; margin-bottom: 6px; }
+.upload-desc { color: var(--muted); font-size: 0.86rem; margin-bottom: 20px; }
+.fmt-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; }
+.fmt-tag { font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; background: var(--cream); border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px; color: var(--muted); }
+#fileInput { display: none; }
+.btn-file {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--accent2); color: white; border: none;
+  padding: 11px 24px; border-radius: 8px; font-size: 0.88rem;
+  font-family: 'Noto Sans JP', sans-serif; cursor: pointer; font-weight: 500; transition: all 0.2s;
+}
+.btn-file:hover { background: #1a4f7a; transform: translateY(-1px); }
+.divider { display: flex; align-items: center; gap: 14px; margin: 20px 0; color: var(--muted); font-size: 0.78rem; }
+.divider::before, .divider::after { content:''; flex:1; height:1px; background: var(--border); }
+textarea#paperText {
+  width: 100%; min-height: 130px; border: 1.5px solid var(--border); border-radius: 8px;
+  padding: 13px 15px; font-family: 'Noto Sans JP', sans-serif; font-size: 0.875rem;
+  resize: vertical; background: white; color: var(--ink); outline: none; line-height: 1.7; transition: border-color 0.2s;
+}
+textarea#paperText:focus { border-color: var(--accent2); }
+textarea#paperText::placeholder { color: #bbb; }
+
+.my-research-toggle { margin-top: 14px; border: 1.5px solid var(--border); border-radius: 8px; overflow: hidden; }
+.toggle-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; background: var(--cream); cursor: pointer; user-select: none; font-size: 0.82rem; font-weight: 500;
+}
+.toggle-header:hover { background: #ebe5d8; }
+.toggle-arrow { margin-left: auto; font-size: 0.8rem; transition: transform 0.2s; }
+.toggle-arrow.open { transform: rotate(180deg); }
+.toggle-body { display: none; padding: 14px 16px; background: white; border-top: 1px solid var(--border); }
+.toggle-body.open { display: block; }
+.toggle-body textarea {
+  width: 100%; min-height: 80px; border: 1.5px solid var(--border); border-radius: 6px;
+  padding: 10px 13px; font-family: 'Noto Sans JP', sans-serif; font-size: 0.83rem;
+  resize: vertical; background: var(--paper); color: var(--ink); outline: none; line-height: 1.7;
+}
+.toggle-body textarea:focus { border-color: var(--teal); }
+
+.btn-analyze {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; margin-top: 14px; background: var(--accent); color: white; border: none;
+  padding: 15px; border-radius: 8px; font-size: 0.95rem;
+  font-family: 'Noto Serif JP', serif; font-weight: 600; cursor: pointer; transition: all 0.2s;
+}
+.btn-analyze:hover { background: #a33415; transform: translateY(-1px); }
+.btn-analyze:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+
+/* LOADING */
+#loadingState { max-width: 820px; margin: 32px auto; padding: 0 24px; display: none; }
+.loading-card { background: white; border-radius: 12px; padding: 40px; text-align: center; border: 1px solid var(--border); }
+.spinner { width: 48px; height: 48px; border: 3px solid var(--cream); border-top: 3px solid var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; margin: 0 auto 18px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.step { font-size: 0.78rem; color: var(--muted); padding: 4px 0; opacity: 0; transition: opacity 0.4s; font-family: 'IBM Plex Mono', monospace; }
+.step.active { opacity: 1; color: var(--accent2); }
+.step.done { opacity: 0.4; }
+
+/* RESULTS */
+#results { max-width: 1240px; margin: 32px auto 80px; padding: 0 24px; display: none; }
+
+.result-header {
+  background: white; border-radius: 12px; padding: 28px 32px; margin-bottom: 20px;
+  border: 1px solid var(--border); position: relative; overflow: hidden;
+}
+.result-header::before {
+  content:''; position: absolute; top:0;left:0;right:0; height:4px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2), var(--teal));
+}
+.paper-title { font-family: 'Noto Serif JP', serif; font-size: 1.45rem; font-weight: 700; line-height: 1.5; margin-bottom: 10px; }
+.paper-meta { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+.meta-chip { font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; background: var(--cream); border: 1px solid var(--border); padding: 2px 9px; border-radius: 20px; color: var(--muted); }
+.abstract-box { background: var(--cream); border-left: 3px solid var(--accent2); padding: 14px 18px; border-radius: 0 8px 8px 0; font-size: 0.86rem; color: #333; line-height: 1.85; }
+
+.key-points { background: var(--ink); color: var(--paper); border-radius: 12px; padding: 24px 28px; margin-bottom: 20px; }
+.key-points h3 { font-family: 'Noto Serif JP', serif; font-size: 0.9rem; margin-bottom: 14px; color: var(--gold); letter-spacing: 1px; text-transform: uppercase; }
+.key-list { list-style: none; }
+.key-list li { font-size: 0.85rem; line-height: 1.8; padding: 5px 0; border-bottom: 1px solid #222; display: flex; gap: 10px; }
+.key-list li:last-child { border-bottom: none; }
+.key-num { font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; color: var(--accent); margin-top: 3px; flex-shrink: 0; }
+
+/* MY RESEARCH CONNECTION */
+.my-connection {
+  background: linear-gradient(135deg, #0d1f1f 0%, #0d2a2a 100%);
+  border: 1.5px solid var(--teal); border-radius: 14px;
+  padding: 28px 32px; margin-bottom: 20px;
+  position: relative; overflow: hidden;
+}
+.my-connection::before {
+  content:''; position: absolute; top:-40px; right:-40px;
+  width:180px; height:180px;
+  background: radial-gradient(circle, rgba(13,115,119,0.15) 0%, transparent 70%);
+}
+.my-conn-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.my-conn-icon { width:40px; height:40px; border-radius:10px; background:rgba(13,115,119,0.25); border:1px solid var(--teal); display:flex; align-items:center; justify-content:center; font-size:1.2rem; flex-shrink:0; }
+.my-conn-title { font-family: 'Noto Serif JP', serif; font-size: 1.05rem; font-weight: 700; color: #7ecac9; }
+.my-conn-sub { font-size: 0.7rem; color: #5a9ea0; font-family: 'IBM Plex Mono', monospace; }
+
+.conn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 700px) { .conn-grid { grid-template-columns: 1fr; } }
+.conn-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(13,115,119,0.3); border-radius: 10px; padding: 16px; }
+.conn-card.full { grid-column: 1 / -1; }
+.conn-card-type { font-family: 'IBM Plex Mono', monospace; font-size: 0.64rem; color: var(--teal); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.conn-card-text { font-size: 0.83rem; color: #ccc; line-height: 1.75; }
+
+.conn-strength { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(13,115,119,0.3); display: flex; align-items: center; gap: 14px; }
+.conn-strength-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: #5a9ea0; white-space: nowrap; }
+.strength-bar { flex:1; height:6px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden; }
+.strength-fill { height:100%; background:linear-gradient(90deg, var(--teal), #4dcaca); border-radius:3px; }
+.strength-pct { font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: #7ecac9; font-weight: 600; }
+.no-profile-note { background: rgba(255,255,255,0.04); border: 1px dashed rgba(13,115,119,0.4); border-radius: 8px; padding: 16px 20px; font-size: 0.82rem; color: #7a9a9a; text-align: center; line-height: 1.8; }
+.no-profile-note a { color: var(--teal); cursor: pointer; text-decoration: underline; }
+
+/* SECTIONS */
+.sections-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 20px; }
+@media (max-width: 900px) { .sections-grid { grid-template-columns: 1fr; } }
+.section-card { background: white; border-radius: 12px; border: 1px solid var(--border); overflow: hidden; transition: box-shadow 0.2s; }
+.section-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+.section-header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.section-icon { width:34px; height:34px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:1rem; flex-shrink:0; }
+.icon-bg { background: #fff3e0; } .icon-method { background: #e3f2fd; } .icon-result { background: #e8f5e9; } .icon-disc { background: #fce4ec; }
+.section-title { font-family: 'Noto Serif JP', serif; font-weight: 600; font-size: 0.92rem; }
+.section-content { padding: 18px; }
+.section-content p { font-size: 0.86rem; line-height: 1.9; color: #333; }
+.section-content ul { padding-left: 18px; }
+.section-content li { font-size: 0.86rem; line-height: 1.9; color: #333; margin-bottom: 3px; }
+.figure-area { background: var(--cream); border-radius: 8px; padding: 14px; margin-top: 12px; border: 1px solid var(--border); }
+.fig-caption { font-size: 0.72rem; color: var(--muted); margin-top: 8px; text-align: center; font-style: italic; }
+.flow-svg { width: 100%; max-width: 560px; display: block; margin: 0 auto; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { padding: 3px 10px; border-radius: 12px; font-size: 0.74rem; border: 1px solid; }
+.info-tag { display:inline-block; font-size:0.72rem; font-family:'IBM Plex Mono',monospace; background:#f5f8fc; border:1px solid #c5dae8; color:var(--accent2); padding:2px 8px; border-radius:4px; margin:2px; }
+
+/* SIMILAR PAPERS */
+.sim-title { font-family: 'Noto Serif JP', serif; font-size: 1.15rem; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+.sim-desc { font-size: 0.8rem; color: var(--muted); margin-bottom: 16px; }
+.sim-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.sim-card { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; transition: all 0.2s; }
+.sim-card:hover { border-color: var(--accent2); box-shadow: 0 4px 16px rgba(42,100,150,0.1); }
+.sim-type { font-family: 'IBM Plex Mono', monospace; font-size: 0.63rem; letter-spacing: 0.5px; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; display: inline-block; margin-bottom: 7px; }
+.t-cell { background: var(--tag-bio); color: var(--tag-bio-t); }
+.t-gene { background: var(--tag-gene); color: var(--tag-gene-t); }
+.t-comp { background: var(--tag-chem); color: var(--tag-chem-t); }
+.sim-card-title { font-family: 'Noto Serif JP', serif; font-size: 0.88rem; font-weight: 600; line-height: 1.5; margin-bottom: 5px; }
+.sim-card-journal { font-size: 0.72rem; color: var(--muted); font-family: 'IBM Plex Mono', monospace; margin-bottom: 7px; }
+.sim-reason { font-size: 0.79rem; color: #555; line-height: 1.65; border-top: 1px solid var(--border); padding-top: 7px; margin-top: 7px; }
+.rel-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.rel-bar { flex:1; height:4px; background:var(--cream); border-radius:2px; overflow:hidden; }
+.rel-fill { height:100%; background:var(--accent2); border-radius:2px; }
+.rel-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.63rem; color: var(--muted); }
+
+.scroll-top { position:fixed; bottom:24px; right:24px; width:42px; height:42px; background:var(--ink); color:white; border:none; border-radius:50%; font-size:1.1rem; cursor:pointer; display:none; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:99; transition:background 0.2s; }
+.scroll-top:hover { background: var(--accent); }
+.err-box { background:#fff5f5; border:1px solid #f5c6cb; border-radius:8px; padding:18px; color:#721c24; font-size:0.86rem; }
+</style>
+</head>
+<body>
+
+<!-- PROFILE MODAL -->
+<div class="modal-overlay" id="profileModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">🔬 自分の研究プロフィールを登録</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.83rem;color:var(--muted);margin-bottom:18px">一度登録しておくと、以降の論文解析で自動的に「自分の研究との関連考察」が生成されます。</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">研究分野</label>
+          <input class="form-input" id="pf_field" placeholder="例: 細胞生物学、天然物化学">
+        </div>
+        <div class="form-group">
+          <label class="form-label">使用細胞株 / モデル生物</label>
+          <input class="form-input" id="pf_cell" placeholder="例: HeLa, MCF-7, マウス">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">研究対象（遺伝子・タンパク質・化合物など）</label>
+        <input class="form-input" id="pf_target" placeholder="例: NF-κB, p53, クルクミン, ポリフェノール">
+      </div>
+      <div class="form-group">
+        <label class="form-label">研究テーマ・目的</label>
+        <textarea class="form-textarea" id="pf_theme" placeholder="例: 乳がん細胞における天然物由来化合物のアポトーシス誘導メカニズムの解明を目指しています。特にミトコンドリア経路を中心に検討しています。"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">主な実験手法</label>
+        <input class="form-input" id="pf_methods" placeholder="例: Western blot, qPCR, フローサイトメトリー, ELISA">
+      </div>
+      <div class="form-group">
+        <label class="form-label">現在の課題・興味（任意）</label>
+        <textarea class="form-textarea" id="pf_interest" style="min-height:65px" placeholder="例: 選択的毒性のメカニズムが不明、in vivo実験への展開を考えている"></textarea>
+      </div>
+      <button class="btn-save" onclick="saveProfile()">✓ プロフィールを保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="header-inner">
+    <div>
+      <div class="logo">PAPER<span>AI</span></div>
+      <div class="hdr-sub">論文解析・要約システム</div>
+    </div>
+    <div class="header-right">
+      <button class="nav-btn" id="profileBtn" onclick="openModal()">👤 研究プロフィール</button>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;background:#1e1e1e;border:1px solid #444;color:#777;padding:4px 10px;border-radius:20px">claude-sonnet-4</div>
+    </div>
+  </div>
+  <div class="pb-header">
+    <div class="profile-badge" id="profileBadge">
+      <span class="pb-label">MY RESEARCH</span>
+      <span class="pb-text" id="pbText"></span>
+      <button class="pb-edit" onclick="openModal()">編集</button>
+    </div>
+  </div>
+</header>
+
+<!-- UPLOAD -->
+<div class="upload-zone" id="uploadZone">
+  <div class="upload-card" id="dropZone">
+    <div class="upload-icon">📄</div>
+    <div class="upload-title">論文をアップロード / テキストを貼り付け</div>
+    <div class="upload-desc">背景・実験方法・結果・考察を自動解析。<strong>自分の研究との関連考察</strong>も生成します</div>
+    <div class="fmt-row">
+      <span class="fmt-tag">PDF</span><span class="fmt-tag">TXT</span>
+      <span class="fmt-tag">Abstract</span><span class="fmt-tag">Full text</span>
+    </div>
+    <input type="file" id="fileInput" accept=".pdf,.txt">
+    <button class="btn-file" onclick="document.getElementById('fileInput').click()">📁 ファイルを選択</button>
+  </div>
+
+  <div class="divider">または テキストを直接貼り付け</div>
+  <textarea id="paperText" placeholder="論文のアブストラクト・本文をここに貼り付け…"></textarea>
+
+  <!-- My research toggle -->
+  <div class="my-research-toggle">
+    <div class="toggle-header" onclick="toggleMR()">
+      <span>🔬</span>
+      <span style="font-size:0.82rem">自分の研究情報を入力して関連考察を生成（任意）</span>
+      <span id="toggleStatus" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:var(--teal);margin-left:4px"></span>
+      <span class="toggle-arrow" id="toggleArrow">▾</span>
+    </div>
+    <div class="toggle-body" id="toggleBody">
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:10px">プロフィール登録済みの場合は自動入力されます。ここで上書きも可能です。</p>
+      <textarea id="myResearchText" placeholder="例：MCF-7細胞を使用してクルクミンのNF-κB抑制とアポトーシス誘導を研究しています。Western blot・qPCRが主な手法です。"></textarea>
+    </div>
+  </div>
+
+  <button class="btn-analyze" id="analyzeBtn" onclick="analyzePaper()">🔬 論文を解析・要約する</button>
+</div>
+
+<!-- LOADING -->
+<div id="loadingState">
+  <div class="loading-card">
+    <div class="spinner"></div>
+    <div style="font-family:'Noto Serif JP',serif;font-size:1.05rem;font-weight:600">論文を解析中...</div>
+    <div style="margin-top:18px">
+      <div class="step" id="s1">▸ テキストを読み込んでいます...</div>
+      <div class="step" id="s2">▸ セクションを抽出しています...</div>
+      <div class="step" id="s3">▸ 実験方法・結果を解析しています...</div>
+      <div class="step" id="s4">▸ 図解を生成しています...</div>
+      <div class="step" id="s5">▸ あなたの研究との関連を分析しています...</div>
+      <div class="step" id="s6">▸ 類似論文を検索しています...</div>
+      <div class="step" id="s7">▸ 要約レポートを作成しています...</div>
+    </div>
+  </div>
+</div>
+
+<!-- RESULTS -->
+<div id="results"></div>
+
+<button class="scroll-top" id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+let myProfile = null;
+
+function openModal() {
+  if (myProfile) {
+    document.getElementById('pf_field').value = myProfile.field||'';
+    document.getElementById('pf_cell').value = myProfile.cell||'';
+    document.getElementById('pf_target').value = myProfile.target||'';
+    document.getElementById('pf_theme').value = myProfile.theme||'';
+    document.getElementById('pf_methods').value = myProfile.methods||'';
+    document.getElementById('pf_interest').value = myProfile.interest||'';
+  }
+  document.getElementById('profileModal').classList.add('open');
+}
+function closeModal() { document.getElementById('profileModal').classList.remove('open'); }
+document.getElementById('profileModal').addEventListener('click', e => { if (e.target===document.getElementById('profileModal')) closeModal(); });
+
+function saveProfile() {
+  myProfile = {
+    field: document.getElementById('pf_field').value.trim(),
+    cell: document.getElementById('pf_cell').value.trim(),
+    target: document.getElementById('pf_target').value.trim(),
+    theme: document.getElementById('pf_theme').value.trim(),
+    methods: document.getElementById('pf_methods').value.trim(),
+    interest: document.getElementById('pf_interest').value.trim(),
+  };
+  if (!myProfile.theme && !myProfile.field) { alert('少なくとも研究分野またはテーマを入力してください。'); return; }
+  // update badge
+  const badge = document.getElementById('profileBadge');
+  badge.classList.add('visible');
+  let s = [myProfile.field, myProfile.cell, myProfile.target].filter(Boolean).join(' · ');
+  document.getElementById('pbText').textContent = s || myProfile.theme.substring(0,60)+'…';
+  document.getElementById('profileBtn').classList.add('active');
+  // auto-fill toggle
+  let parts = [];
+  if (myProfile.field) parts.push('研究分野：'+myProfile.field);
+  if (myProfile.cell) parts.push('使用細胞/モデル：'+myProfile.cell);
+  if (myProfile.target) parts.push('研究対象：'+myProfile.target);
+  if (myProfile.theme) parts.push('研究テーマ：'+myProfile.theme);
+  if (myProfile.methods) parts.push('主な実験手法：'+myProfile.methods);
+  if (myProfile.interest) parts.push('現在の課題：'+myProfile.interest);
+  document.getElementById('myResearchText').value = parts.join('\n');
+  document.getElementById('toggleStatus').textContent = '✓ プロフィール適用中';
+  closeModal();
+}
+
+function toggleMR() {
+  document.getElementById('toggleBody').classList.toggle('open');
+  document.getElementById('toggleArrow').classList.toggle('open');
+}
+
+// File
+const dz = document.getElementById('dropZone');
+const fi = document.getElementById('fileInput');
+dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('drag-over');});
+dz.addEventListener('dragleave', ()=>dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e=>{e.preventDefault();dz.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)hf(f);});
+fi.addEventListener('change', e=>{if(e.target.files[0])hf(e.target.files[0]);});
+function hf(f) {
+  if (f.type==='application/pdf') { document.getElementById('paperText').value=`[PDF: ${f.name}]\nPDFの本文テキストをここに貼り付けるか、アブストラクトをご入力ください。`; }
+  else { const r=new FileReader(); r.onload=e=>{document.getElementById('paperText').value=e.target.result;}; r.readAsText(f); }
+}
+
+// Loading
+let stepTimer, stepIdx=0;
+function startSteps() {
+  const steps=['s1','s2','s3','s4','s5','s6','s7'];
+  stepIdx=0; steps.forEach(s=>document.getElementById(s).className='step');
+  stepTimer=setInterval(()=>{
+    if(stepIdx>0)document.getElementById(steps[stepIdx-1]).className='step done';
+    if(stepIdx<steps.length){document.getElementById(steps[stepIdx]).className='step active';stepIdx++;}
+    else clearInterval(stepTimer);
+  },800);
+}
+
+// ANALYZE
+async function analyzePaper() {
+  const pt = document.getElementById('paperText').value.trim();
+  if (!pt||pt.length<20){alert('論文テキストを入力してください。');return;}
+  const mr = document.getElementById('myResearchText').value.trim();
+  const hasMR = mr.length>10;
+
+  document.getElementById('uploadZone').style.display='none';
+  document.getElementById('loadingState').style.display='block';
+  document.getElementById('results').style.display='none';
+  startSteps();
+
+  const sys = `あなたは論文解析の専門家AIです。論文を詳細に分析し、以下のJSON形式のみで回答してください（コードブロック不要）。
+
+{
+  "title": "論文タイトル",
+  "authors": "著者",
+  "journal": "雑誌名・年",
+  "keywords": ["KW1","KW2","KW3"],
+  "abstract_ja": "アブストラクト日本語要約（3文）",
+  "background": {
+    "summary": "研究背景（200字以上）",
+    "key_concepts": ["概念1","概念2","概念3"],
+    "diagram_nodes": ["背景/課題","研究動機","本研究の位置づけ"]
+  },
+  "methods": {
+    "summary": "実験方法（200字以上）",
+    "steps": ["ステップ1","ステップ2","ステップ3","ステップ4"],
+    "cell_line": "使用細胞株・生物材料",
+    "compound": "使用化合物・成分"
+  },
+  "results": {
+    "summary": "主な結果（200字以上）",
+    "key_findings": ["知見1","知見2","知見3"],
+    "data_types": ["Western Blot","qPCR"]
+  },
+  "discussion": {
+    "summary": "考察（200字以上）",
+    "significance": "研究の意義",
+    "limitations": "研究の限界",
+    "future_directions": "今後の展望"
+  },
+  "key_takeaways": ["ポイント1","ポイント2","ポイント3","ポイント4","ポイント5"],
+  "my_research_connection": ${hasMR?`{
+    "overall_relevance": 75,
+    "common_ground": "共通点・重なる領域（100字以上、具体的に）",
+    "methodological_hints": "実験手法への応用ヒント（100字以上、研究者の手法に即して）",
+    "hypothesis_suggestions": "導ける新たな仮説・着眼点（100字以上、建設的に）",
+    "gap_analysis": "この論文で未解明で自分の研究で検討できる点（100字以上）",
+    "caution_points": "解釈の差異・注意点（80字以上）"
+  }`:'null'},
+  "similar_papers": [
+    {"title":"原著論文タイトル（レビュー不可）","authors":"著者","journal":"雑誌 Year","type":"cell","type_label":"同一細胞株","relevance":85,"reason":"具体的理由","doi":"PMID/DOI"},
+    {"title":"原著論文タイトル2","authors":"著者","journal":"雑誌 Year","type":"gene","type_label":"同一遺伝子/タンパク質","relevance":80,"reason":"具体的理由","doi":"PMID/DOI"},
+    {"title":"原著論文タイトル3","authors":"著者","journal":"雑誌 Year","type":"comp","type_label":"同一化合物/成分","relevance":75,"reason":"具体的理由","doi":"PMID/DOI"},
+    {"title":"原著論文タイトル4","authors":"著者","journal":"雑誌 Year","type":"cell","type_label":"同一細胞株","relevance":70,"reason":"具体的理由","doi":"PMID/DOI"}
+  ]
+}${hasMR?'\n\nmy_research_connectionは研究者の情報を深く参照し、具体的かつ実践的なアドバイスを含めること。':''}`;
+
+  const um = `以下の論文を解析してください：\n\n${pt.substring(0,8000)}${hasMR?`\n\n---\n【解析者の研究情報】\n${mr}`:''}`;
+
+  try {
+    const resp = await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4096,system:sys,messages:[{role:"user",content:um}]})
+    });
+    clearInterval(stepTimer);
+    const data = await resp.json();
+    const raw = data.content.map(i=>i.text||'').join('');
+    let parsed;
+    try { parsed=JSON.parse(raw.replace(/```json|```/g,'').trim()); }
+    catch { const m=raw.match(/\{[\s\S]*\}/); if(m)parsed=JSON.parse(m[0]); else throw new Error('JSON解析失敗'); }
+    renderResults(parsed, hasMR);
+  } catch(err) {
+    console.error(err);
+    document.getElementById('loadingState').style.display='none';
+    document.getElementById('results').style.display='block';
+    document.getElementById('results').innerHTML=`<div style="max-width:820px;margin:0 auto"><div class="err-box"><strong>解析エラー</strong><br>${esc(err.message)}</div><button class="btn-analyze" style="margin-top:14px;max-width:280px;background:var(--ink)" onclick="location.reload()">← やり直す</button></div>`;
+  }
+}
+
+function renderResults(d, hasMR) {
+  document.getElementById('loadingState').style.display='none';
+  const el=document.getElementById('results');
+  el.style.display='block';
+  const tc={cell:'t-cell',gene:'t-gene',comp:'t-comp'};
+  const mc=d.my_research_connection;
+
+  el.innerHTML=`
+    <div class="result-header">
+      <div class="paper-title">${esc(d.title||'論文タイトル')}</div>
+      <div class="paper-meta">
+        ${d.authors?`<span class="meta-chip">👤 ${esc(d.authors)}</span>`:''}
+        ${d.journal?`<span class="meta-chip">📰 ${esc(d.journal)}</span>`:''}
+        ${(d.keywords||[]).map(k=>`<span class="meta-chip">🏷 ${esc(k)}</span>`).join('')}
+      </div>
+      ${d.abstract_ja?`<div class="abstract-box">${esc(d.abstract_ja)}</div>`:''}
+    </div>
+
+    <div class="key-points">
+      <h3>📌 KEY TAKEAWAYS</h3>
+      <ul class="key-list">
+        ${(d.key_takeaways||[]).map((t,i)=>`<li><span class="key-num">0${i+1}</span><span>${esc(t)}</span></li>`).join('')}
+      </ul>
+    </div>
+
+    <div class="my-connection">
+      <div class="my-conn-header">
+        <div class="my-conn-icon">🔗</div>
+        <div>
+          <div class="my-conn-title">自分の研究との関連考察</div>
+          <div class="my-conn-sub">MY RESEARCH CONNECTION ANALYSIS</div>
+        </div>
+      </div>
+      ${renderMC(mc, hasMR)}
+    </div>
+
+    <div class="sections-grid">
+      <div class="section-card">
+        <div class="section-header"><div class="section-icon icon-bg">🔍</div><div class="section-title">研究背景 / Background</div></div>
+        <div class="section-content">
+          <p>${esc(d.background?.summary||'')}</p>
+          ${d.background?.key_concepts?.length?`<div class="chip-row">${d.background.key_concepts.map(c=>`<span class="chip" style="background:#e3f2fd;border-color:#90caf9;color:#1565c0">${esc(c)}</span>`).join('')}</div>`:''}
+          ${bgDiagram(d.background?.diagram_nodes||[])}
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="section-header"><div class="section-icon icon-method">🧪</div><div class="section-title">実験方法 / Methods</div></div>
+        <div class="section-content">
+          ${d.methods?.cell_line?`<div style="margin-bottom:8px"><span class="info-tag">🦠 ${esc(d.methods.cell_line)}</span></div>`:''}
+          ${d.methods?.compound?`<div style="margin-bottom:8px"><span class="info-tag" style="background:#f3e5f5;border-color:#ce93d8;color:#7b1fa2">💊 ${esc(d.methods.compound)}</span></div>`:''}
+          <p>${esc(d.methods?.summary||'')}</p>
+          ${mFlow(d.methods?.steps||[])}
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="section-header"><div class="section-icon icon-result">📊</div><div class="section-title">結果 / Results</div></div>
+        <div class="section-content">
+          <p>${esc(d.results?.summary||'')}</p>
+          ${d.results?.data_types?.length?`<div class="chip-row">${d.results.data_types.map(t=>`<span class="chip" style="background:#e8f5e9;border-color:#a5d6a7;color:#2e7d32">${esc(t)}</span>`).join('')}</div>`:''}
+          ${d.results?.key_findings?.length?`<div class="figure-area"><div style="font-size:0.72rem;color:var(--muted);margin-bottom:7px;font-family:'IBM Plex Mono',monospace">主要知見</div><ul>${d.results.key_findings.map(f=>`<li style="font-size:0.82rem;line-height:1.7;margin-bottom:3px">${esc(f)}</li>`).join('')}</ul></div>`:''}
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="section-header"><div class="section-icon icon-disc">💡</div><div class="section-title">考察 / Discussion</div></div>
+        <div class="section-content">
+          <p>${esc(d.discussion?.summary||'')}</p>
+          ${d.discussion?.significance?`<div style="margin-top:10px;background:#fffde7;border-left:3px solid #f9a825;padding:9px 13px;border-radius:0 6px 6px 0;font-size:0.81rem"><div style="font-size:0.68rem;color:#f57f17;font-family:'IBM Plex Mono',monospace;margin-bottom:3px">研究の意義</div>${esc(d.discussion.significance)}</div>`:''}
+          ${d.discussion?.limitations?`<div style="margin-top:8px;background:#fff8e1;border-left:3px solid #ffc107;padding:9px 13px;border-radius:0 6px 6px 0;font-size:0.81rem"><div style="font-size:0.68rem;color:#f57f17;font-family:'IBM Plex Mono',monospace;margin-bottom:3px">限界・課題</div>${esc(d.discussion.limitations)}</div>`:''}
+          ${d.discussion?.future_directions?`<div style="margin-top:8px;background:#e8f5e9;border-left:3px solid #43a047;padding:9px 13px;border-radius:0 6px 6px 0;font-size:0.81rem"><div style="font-size:0.68rem;color:#2e7d32;font-family:'IBM Plex Mono',monospace;margin-bottom:3px">今後の展望</div>${esc(d.discussion.future_directions)}</div>`:''}
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:24px">
+      <div class="sim-title">🔗 類似論文（原著のみ）<span style="font-size:0.72rem;font-weight:400;color:var(--muted);font-family:'IBM Plex Mono',monospace">レビュー除く</span></div>
+      <div class="sim-desc">同一細胞株・遺伝子・タンパク質・化合物を対象とした関連原著論文</div>
+      <div class="sim-grid">
+        ${(d.similar_papers||[]).map(p=>`
+          <div class="sim-card">
+            <div class="sim-type ${tc[p.type]||'t-cell'}">${esc(p.type_label||p.type)}</div>
+            <div class="sim-card-title">${esc(p.title)}</div>
+            <div class="sim-card-journal">${esc(p.journal||'')}${p.doi?` · ${esc(p.doi)}`:''}</div>
+            <div class="sim-reason">📎 ${esc(p.reason)}</div>
+            <div class="rel-row"><div class="rel-bar"><div class="rel-fill" style="width:${p.relevance||70}%"></div></div><div class="rel-label">${p.relevance||70}%</div></div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-top:32px">
+      <button class="btn-analyze" style="max-width:280px;background:var(--ink)" onclick="location.reload()">← 別の論文を解析する</button>
+    </div>
+  `;
+  document.getElementById('scrollTop').style.display='flex';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function renderMC(mc, hasMR) {
+  if (!hasMR||!mc) return `<div class="no-profile-note">研究情報が未入力です。<br><a onclick="toggleMR();setTimeout(()=>document.getElementById('toggleBody').scrollIntoView({behavior:'smooth'}),100)">「自分の研究情報を入力」</a>から追加するか、上部の<a onclick="openModal()">「研究プロフィール」</a>を登録すると、論文との関連考察が自動生成されます。</div>`;
+  const pct=mc.overall_relevance||70;
+  return `
+    <div class="conn-grid">
+      ${mc.common_ground?`<div class="conn-card"><div class="conn-card-type">🤝 共通領域・重なる点</div><div class="conn-card-text">${esc(mc.common_ground)}</div></div>`:''}
+      ${mc.methodological_hints?`<div class="conn-card"><div class="conn-card-type">🧪 手法への応用ヒント</div><div class="conn-card-text">${esc(mc.methodological_hints)}</div></div>`:''}
+      ${mc.hypothesis_suggestions?`<div class="conn-card"><div class="conn-card-type">💡 新たな仮説・着眼点</div><div class="conn-card-text">${esc(mc.hypothesis_suggestions)}</div></div>`:''}
+      ${mc.gap_analysis?`<div class="conn-card"><div class="conn-card-type">🔭 未解明領域・発展余地</div><div class="conn-card-text">${esc(mc.gap_analysis)}</div></div>`:''}
+      ${mc.caution_points?`<div class="conn-card full"><div class="conn-card-type">⚠️ 解釈の注意点・差異</div><div class="conn-card-text">${esc(mc.caution_points)}</div></div>`:''}
+    </div>
+    <div class="conn-strength">
+      <span class="conn-strength-label">自分の研究との関連度</span>
+      <div class="strength-bar"><div class="strength-fill" style="width:${pct}%"></div></div>
+      <span class="strength-pct">${pct}%</span>
+    </div>`;
+}
+
+function bgDiagram(nodes) {
+  if (!nodes||nodes.length<2) return '';
+  const c=['#e3f2fd','#bbdefb','#90caf9'],t=['#0d47a1','#1565c0','#1976d2'];
+  return `<div class="figure-area"><svg viewBox="0 0 380 ${nodes.length*58+10}" class="flow-svg">${nodes.map((n,i)=>`<rect x="20" y="${i*58+6}" width="340" height="42" rx="7" fill="${c[i%c.length]}" stroke="#90caf9" stroke-width="1.2"/><text x="190" y="${i*58+32}" text-anchor="middle" font-family="Noto Sans JP,sans-serif" font-size="12" fill="${t[i%t.length]}">${esc(n.length>30?n.substring(0,30)+'…':n)}</text>${i<nodes.length-1?`<polygon points="186,${i*58+50} 194,${i*58+50} 190,${i*58+57}" fill="#64b5f6"/>`:''}`)  .join('')}</svg><div class="fig-caption">研究背景のフロー</div></div>`;
+}
+
+function mFlow(steps) {
+  if (!steps||steps.length<1) return '';
+  const f=['#fff3e0','#fce4ec','#e8f5e9','#f3e5f5','#e1f5fe','#fffde7'];
+  const s=['#ffcc80','#f48fb1','#a5d6a7','#ce93d8','#81d4fa','#ffe082'];
+  const t=['#e65100','#880e4f','#2e7d32','#6a1b9a','#01579b','#f57f17'];
+  return `<div class="figure-area" style="margin-top:12px"><svg viewBox="0 0 360 ${steps.length*52+10}" class="flow-svg">${steps.map((n,i)=>`<rect x="6" y="${i*52+6}" width="348" height="38" rx="6" fill="${f[i%f.length]}" stroke="${s[i%s.length]}" stroke-width="1.2"/><circle cx="26" cy="${i*52+25}" r="9" fill="${s[i%s.length]}"/><text x="26" y="${i*52+30}" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="white" font-weight="600">${i+1}</text><text x="44" y="${i*52+29}" font-family="Noto Sans JP,sans-serif" font-size="11.5" fill="${t[i%t.length]}">${esc(n.length>32?n.substring(0,32)+'…':n)}</text>${i<steps.length-1?`<line x1="180" y1="${i*52+46}" x2="180" y2="${i*52+51}" stroke="#ccc" stroke-width="1.5"/><polygon points="176,${i*52+51} 184,${i*52+51} 180,${i*52+57}" fill="#ccc"/>`:''}`)  .join('')}</svg><div class="fig-caption">実験フローチャート</div></div>`;
+}
+
+function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+window.addEventListener('scroll',()=>{document.getElementById('scrollTop').style.display=window.scrollY>300?'flex':'none';});
+</script>
+</body>
+</html>
